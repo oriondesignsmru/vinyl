@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vinyl — YouTube Audio Player</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23ff6b35'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%230a0606'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23ffb627'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0606;
+    --bg-2: #1a0e0a;
+    --card: rgba(255, 245, 230, 0.04);
+    --card-strong: rgba(255, 245, 230, 0.07);
+    --border: rgba(255, 180, 130, 0.14);
+    --border-strong: rgba(255, 180, 130, 0.28);
+    --fg: #fef3e7;
+    --muted: #a89888;
+    --muted-2: #6b5d52;
+    --accent: #ff6b35;
+    --accent-2: #ffb627;
+    --accent-3: #d63031;
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--fg);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    min-height: 100vh; overflow-x: hidden;
+  }
+  .font-serif { font-family: 'Instrument Serif', serif; font-weight: 400; }
+
+  /* Atmosphere */
+  .atmosphere { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.35; animation: float 18s ease-in-out infinite; }
+  .blob-1 { width: 600px; height: 600px; background: radial-gradient(circle, #ff6b35, transparent 70%); top: -200px; left: -200px; }
+  .blob-2 { width: 500px; height: 500px; background: radial-gradient(circle, #d63031, transparent 70%); bottom: -150px; right: -100px; animation-delay: -6s; }
+  .blob-3 { width: 400px; height: 400px; background: radial-gradient(circle, #ffb627, transparent 70%); top: 40%; left: 55%; animation-delay: -12s; opacity: 0.2; }
+  @keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(40px, -30px) scale(1.05); }
+    66% { transform: translate(-30px, 40px) scale(0.95); }
+  }
+  .grain { position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  main { position: relative; z-index: 2; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* Brand */
+  .brand { padding: 28px 48px; display: flex; align-items: center; justify-content: space-between; }
+  .brand-mark { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 36px; height: 36px; border-radius: 50%; position: relative;
+    background: conic-gradient(from 0deg, #ff6b35, #ffb627, #d63031, #ff6b35);
+    box-shadow: 0 4px 20px rgba(255, 107, 53, 0.4); }
+  .brand-icon::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: var(--bg); }
+  .brand-icon::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); z-index: 1; }
+  .brand-meta { font-size: 11px; color: var(--muted-2); letter-spacing: 0.12em; text-transform: uppercase; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 100px;
+    background: var(--card-strong); border: 1px solid var(--border); font-size: 11px;
+    color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; backdrop-filter: blur(20px); }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 8px #4ade80; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Stage */
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px 48px 60px; }
+
+  /* Input View */
+  .input-view { max-width: 720px; width: 100%; text-align: center; animation: fadeUp 0.8s ease-out; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .eyebrow { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px; border-radius: 100px;
+    background: var(--card-strong); border: 1px solid var(--border); font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-2); margin-bottom: 28px; }
+  .eyebrow-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); animation: pulse 2s infinite; }
+  h1.hero { font-family: 'Instrument Serif', serif; font-size: clamp(48px, 7vw, 88px);
+    line-height: 0.98; letter-spacing: -0.02em; margin: 0 0 24px; font-weight: 400; }
+  h1.hero em { font-style: italic; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero-sub { color: var(--muted); font-size: 17px; line-height: 1.6; margin: 0 auto 44px; max-width: 540px; }
+
+  .input-row { display: flex; gap: 10px; padding: 8px; background: var(--card-strong);
+    border: 1px solid var(--border); border-radius: 16px; backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px); transition: border-color 0.3s, box-shadow 0.3s; }
+  .input-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.12); }
+  .url-input { flex: 1; background: transparent; border: none; outline: none; color: var(--fg);
+    font-size: 16px; font-family: inherit; padding: 14px 18px; min-width: 0; }
+  .url-input::placeholder { color: var(--muted-2); }
+  .paste-btn { background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 0 16px; border-radius: 10px; cursor: pointer; font-size: 13px; transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px; font-family: inherit; }
+  .paste-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+  .load-btn { background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    border: none; color: white; padding: 0 26px; border-radius: 10px; cursor: pointer;
+    font-size: 14px; font-weight: 600; transition: all 0.2s; display: flex; align-items: center;
+    gap: 10px; box-shadow: 0 4px 20px rgba(255, 107, 53, 0.3); font-family: inherit; }
+  .load-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255, 107, 53, 0.45); }
+  .load-btn:active { transform: translateY(0); }
+  .load-btn:disabled { opacity: 0.6; cursor: wait; transform: none; }
+
+  .hint { margin-top: 22px; color: var(--muted-2); font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .examples { margin-top: 28px; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .examples-label { color: var(--muted-2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; margin-right: 4px; }
+  .example-chip { background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    padding: 7px 14px; border-radius: 100px; cursor: pointer; font-size: 13px; transition: all 0.2s; font-family: inherit; }
+  .example-chip:hover { color: var(--fg); border-color: var(--accent); background: rgba(255, 107, 53, 0.08); }
+
+  /* Recently played (localStorage-backed history).
+     Sits in the same slot as `.examples` — only one of the two is shown. */
+  .recent { margin-top: 28px; display: none; flex-direction: column; align-items: center; gap: 12px; }
+  .recent.visible { display: flex; }
+  .recent-head { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 460px; }
+  .recent-label { flex: 1; text-align: left; color: var(--muted-2); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.12em; }
+  .recent-clear { background: transparent; border: none; color: var(--muted-2); cursor: pointer;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 4px;
+    border-radius: 6px; transition: color 0.2s, background 0.2s; font-family: inherit; }
+  .recent-clear:hover { color: var(--accent); background: rgba(255, 107, 53, 0.08); }
+  .recent-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 460px; }
+  .recent-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 9px 12px; cursor: pointer; transition: all 0.2s; font-family: inherit; color: inherit; }
+  .recent-item:hover { border-color: var(--accent); background: rgba(255, 107, 53, 0.08); }
+  .recent-item.playing { border-color: var(--accent); background: rgba(255, 107, 53, 0.12); }
+  .recent-thumb { width: 44px; height: 44px; border-radius: 8px; flex-shrink: 0;
+    background: #1a1210 center/cover no-repeat; box-shadow: 0 0 0 1px rgba(255, 180, 130, 0.1); }
+  .recent-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .recent-title { font-size: 13px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent-author { font-size: 11px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent-item > i { color: var(--muted-2); font-size: 12px; flex-shrink: 0; }
+  .recent-item.playing > i { color: var(--accent-2); }
+
+  /* Player View */
+  .player-view { max-width: 1100px; width: 100%; display: grid; grid-template-columns: 1fr 1.1fr;
+    gap: 64px; align-items: center; animation: fadeUp 0.6s ease-out; }
+  @media (max-width: 880px) { .player-view { grid-template-columns: 1fr; gap: 36px; } }
+
+  /* Vinyl
+     NOTE: do NOT centre this with `margin: 0 auto`. As a grid item, auto margins
+     make it shrink-to-fit; it has no in-flow content, so width collapses to 0 and
+     `aspect-ratio: 1` then yields height 0 — the whole record (and the thumbnail
+     label inside it) disappears. `justify-self: center` + `width: 100%` centres it
+     in the grid column while keeping a definite width. */
+  .vinyl-stage { position: relative; aspect-ratio: 1; width: 100%; max-width: 440px;
+    justify-self: center; }
+  .vinyl-glow { position: absolute; inset: -8%; background: radial-gradient(circle, rgba(255, 107, 53, 0.35), transparent 60%);
+    filter: blur(40px); z-index: 0; animation: glow 4s ease-in-out infinite; transition: opacity 0.4s; opacity: 0.4; }
+  .vinyl-glow.active { opacity: 0.9; }
+  @keyframes glow { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+  .vinyl { position: relative; width: 100%; height: 100%; border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 28%, rgba(255, 200, 150, 0.06), transparent 45%),
+      repeating-radial-gradient(circle at center,
+        #0a0606 0px, #0a0606 1.5px,
+        #1a1210 1.5px, #1a1210 2.5px
+      );
+    box-shadow:
+      0 30px 80px rgba(0,0,0,0.7),
+      0 0 0 1px rgba(255, 180, 130, 0.08),
+      inset 0 0 30px rgba(0,0,0,0.5);
+    z-index: 1;
+    animation: spin 14s linear infinite;
+    animation-play-state: paused;
+    cursor: pointer;
+    transition: filter 0.3s;
+  }
+  .vinyl:hover { filter: brightness(1.1); }
+  .vinyl.playing { animation-play-state: running; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .vinyl-highlight { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; z-index: 2;
+    background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 35%, transparent 65%, rgba(255,255,255,0.03) 100%); }
+  /* Artwork fills the whole record (inset:0). ::before paints groove rings + edge
+     shading on top of the photo so it still reads as vinyl; ::after is the spindle hole. */
+  .vinyl-label { position: absolute; inset: 0; border-radius: 50%;
+    background-size: cover; background-position: center;
+    background-color: #1a1210;
+    box-shadow: 0 0 0 3px #0a0606, 0 0 0 4px rgba(255, 180, 130, 0.12), inset 0 0 30px rgba(0,0,0,0.5);
+    z-index: 3; transition: background-image 0.4s; }
+  .vinyl-label::before { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background:
+      radial-gradient(circle at center, transparent 52%, rgba(0,0,0,0.55) 100%),
+      repeating-radial-gradient(circle at center,
+        transparent 0px, transparent 2px,
+        rgba(0,0,0,0.28) 2px, rgba(0,0,0,0.28) 3px);
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.45); }
+  .vinyl-label::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 5%; height: 5%; border-radius: 50%; background: #0a0606;
+    box-shadow: 0 0 0 1px rgba(255, 180, 130, 0.25), inset 0 0 4px rgba(0,0,0,0.9); }
+  .vinyl-shadow { position: absolute; bottom: -3%; left: 10%; right: 10%; height: 30px;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.5), transparent 70%);
+    filter: blur(8px); z-index: 0; }
+
+  /* Tonearm */
+  .tonearm { position: absolute; top: -10%; right: -8%; width: 55%; height: 55%; z-index: 4;
+    transform-origin: 88% 12%; transform: rotate(-32deg);
+    transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; }
+  .tonearm.active { transform: rotate(2deg); }
+
+  /* Player Info */
+  .player-info { display: flex; flex-direction: column; gap: 22px; }
+  .now-playing { display: flex; align-items: center; gap: 12px; color: var(--accent-2);
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 500; }
+  .now-playing-bars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+  .now-playing-bars span { width: 2px; background: var(--accent); border-radius: 1px; height: 30%; }
+  .now-playing.active .now-playing-bars span { animation: bars 1s ease-in-out infinite; }
+  .now-playing-bars span:nth-child(1) { animation-delay: 0s; }
+  .now-playing-bars span:nth-child(2) { animation-delay: 0.2s; }
+  .now-playing-bars span:nth-child(3) { animation-delay: 0.4s; }
+  .now-playing-bars span:nth-child(4) { animation-delay: 0.1s; }
+  @keyframes bars { 0%, 100% { height: 30%; } 50% { height: 100%; } }
+
+  .track-title { font-family: 'Instrument Serif', serif; font-size: clamp(30px, 4vw, 46px);
+    line-height: 1.08; margin: 0; font-weight: 400; letter-spacing: -0.01em;
+    line-clamp: 3;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .track-author { color: var(--muted); font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; }
+  .track-author i { color: var(--accent-2); font-size: 12px; }
+  .track-link { color: var(--muted-2); font-size: 12px; text-decoration: none; transition: color 0.2s;
+    font-family: 'DM Sans', monospace; letter-spacing: 0.04em; }
+  .track-link:hover { color: var(--accent-2); }
+
+  /* Seek */
+  .seek-section { display: flex; flex-direction: column; gap: 8px; }
+  .seek-bar { position: relative; height: 6px; background: rgba(255, 245, 230, 0.08);
+    border-radius: 100px; cursor: pointer; overflow: hidden; transition: height 0.2s; }
+  .seek-bar:hover { height: 8px; }
+  .seek-bar-fill { position: absolute; left: 0; top: 0; height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 100px; width: 0%; transition: width 0.1s linear; }
+  .seek-bar:hover .seek-bar-fill { box-shadow: 0 0 12px rgba(255, 107, 53, 0.6); }
+  .seek-bar-input { position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; margin: 0; }
+  .times { display: flex; justify-content: space-between; font-size: 12px;
+    color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+
+  /* Controls */
+  .controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .ctrl-btn { background: var(--card); border: 1px solid var(--border); color: var(--fg);
+    width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 0.2s; font-size: 14px; font-family: inherit; }
+  .ctrl-btn:hover { background: var(--card-strong); border-color: var(--border-strong); transform: translateY(-1px); }
+  .ctrl-btn.primary { width: 60px; height: 60px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    border: none; box-shadow: 0 8px 24px rgba(255, 107, 53, 0.4); font-size: 18px; }
+  .ctrl-btn.primary:hover { transform: scale(1.05); box-shadow: 0 10px 28px rgba(255, 107, 53, 0.55); }
+  .ctrl-btn.primary:active { transform: scale(0.98); }
+
+  .volume-section { display: flex; align-items: center; gap: 10px; color: var(--muted);
+    margin-left: auto; min-width: 140px; }
+  .volume-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 4px;
+    background: rgba(255, 245, 230, 0.1); border-radius: 100px; outline: none; cursor: pointer; }
+  .volume-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%; background: var(--accent-2); cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(255, 180, 130, 0.2); transition: transform 0.2s; }
+  .volume-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .volume-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent-2); cursor: pointer; border: none; box-shadow: 0 0 0 3px rgba(255, 180, 130, 0.2); }
+
+  /* Visualizer */
+  .visualizer { display: flex; align-items: flex-end; justify-content: center; gap: 3px;
+    height: 50px; margin-top: 4px; opacity: 0.3; transition: opacity 0.3s; }
+  .visualizer.active { opacity: 1; }
+  .visualizer span { width: 3px; background: linear-gradient(to top, var(--accent), var(--accent-2));
+    border-radius: 2px; height: 12%; transition: opacity 0.3s; }
+  .visualizer.active span { animation: vis 0.9s ease-in-out infinite; }
+  .visualizer span:nth-child(1) { animation-duration: 0.7s; animation-delay: 0s; }
+  .visualizer span:nth-child(2) { animation-duration: 0.9s; animation-delay: 0.1s; }
+  .visualizer span:nth-child(3) { animation-duration: 0.6s; animation-delay: 0.2s; }
+  .visualizer span:nth-child(4) { animation-duration: 0.8s; animation-delay: 0.05s; }
+  .visualizer span:nth-child(5) { animation-duration: 1.0s; animation-delay: 0.3s; }
+  .visualizer span:nth-child(6) { animation-duration: 0.7s; animation-delay: 0.15s; }
+  .visualizer span:nth-child(7) { animation-duration: 0.85s; animation-delay: 0.25s; }
+  .visualizer span:nth-child(8) { animation-duration: 0.65s; animation-delay: 0.1s; }
+  .visualizer span:nth-child(9) { animation-duration: 0.95s; animation-delay: 0.35s; }
+  .visualizer span:nth-child(10) { animation-duration: 0.75s; animation-delay: 0.05s; }
+  .visualizer span:nth-child(11) { animation-duration: 0.8s; animation-delay: 0.2s; }
+  .visualizer span:nth-child(12) { animation-duration: 0.7s; animation-delay: 0.4s; }
+  .visualizer span:nth-child(13) { animation-duration: 0.9s; animation-delay: 0.15s; }
+  .visualizer span:nth-child(14) { animation-duration: 0.65s; animation-delay: 0.3s; }
+  .visualizer span:nth-child(15) { animation-duration: 0.85s; animation-delay: 0.1s; }
+  @keyframes vis { 0%, 100% { height: 15%; } 50% { height: 95%; } }
+
+  /* Hidden YouTube player */
+  #yt-hidden { position: fixed; top: -9999px; left: -9999px; width: 2px; height: 2px;
+    opacity: 0; pointer-events: none; border: 0; }
+
+  /* Loading spinner */
+  .spinner { display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
+    border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--bg-2); border: 1px solid var(--border); color: var(--fg);
+    padding: 12px 20px; border-radius: 12px; font-size: 14px; opacity: 0;
+    pointer-events: none; transition: all 0.3s; z-index: 100;
+    backdrop-filter: blur(20px); box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    display: flex; align-items: center; gap: 10px; max-width: 90vw; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: var(--accent-3); }
+  .toast i { color: var(--accent-2); }
+  .toast.error i { color: var(--accent-3); }
+
+  /* file:// protocol guard */
+  .protocol-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+    background: linear-gradient(135deg, rgba(214, 48, 49, 0.95), rgba(255, 107, 53, 0.95));
+    color: #fff; padding: 14px 20px; font-size: 13px; line-height: 1.5;
+    display: none; align-items: center; gap: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  .protocol-banner.show { display: flex; }
+  .protocol-banner i { font-size: 16px; flex-shrink: 0; }
+  .protocol-banner code { background: rgba(0,0,0,0.3); padding: 2px 7px; border-radius: 5px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; }
+  .protocol-banner a { color: #fff; text-decoration: underline; font-weight: 600; }
+  body.protocol-blocked main { filter: blur(2px) grayscale(0.4); pointer-events: none; opacity: 0.4; }
+
+  /* Footer */
+  .footer-info { text-align: center; padding: 24px 48px 32px; color: var(--muted-2);
+    font-size: 12px; letter-spacing: 0.04em; }
+  .footer-info kbd { background: var(--card-strong); border: 1px solid var(--border);
+    padding: 2px 6px; border-radius: 4px; font-family: inherit; font-size: 11px; color: var(--muted); margin: 0 2px; }
+
+  /* Header action cluster (Home / New Track).
+     These live in the header's flex row rather than `position: fixed` — as fixed
+     elements they overlapped the brand block and the hero headline on narrow
+     viewports. In-flow they can never collide with the text below. */
+  .top-actions { display: flex; align-items: center; gap: 10px; }
+  .new-track, .back-btn { background: var(--card-strong);
+    border: 1px solid var(--border); color: var(--fg); padding: 9px 16px; border-radius: 100px;
+    cursor: pointer; font-size: 13px; transition: all 0.2s; white-space: nowrap;
+    display: none; align-items: center; gap: 8px; backdrop-filter: blur(20px); font-family: inherit; }
+  .new-track.visible, .back-btn.visible { display: flex; }
+  .new-track:hover, .back-btn:hover { border-color: var(--accent); background: rgba(255, 107, 53, 0.1); }
+
+  /* "Still playing" strip shown in the hero view when a track is running */
+  .resume-bar { display: none; align-items: center; gap: 12px; margin: 0 auto 28px;
+    max-width: 460px; padding: 10px 14px; border-radius: 14px; text-align: left;
+    background: var(--card-strong); border: 1px solid var(--border);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .resume-bar.visible { display: flex; }
+  .resume-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80;
+    box-shadow: 0 0 8px #4ade80; animation: pulse 2s infinite; flex-shrink: 0; }
+  .resume-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .resume-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-2); }
+  .resume-title { font-size: 13px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .resume-back { background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 7px 13px; border-radius: 100px; cursor: pointer; font-size: 12px; white-space: nowrap;
+    transition: all 0.2s; font-family: inherit; display: flex; align-items: center; gap: 8px; }
+  .resume-back:hover { color: var(--fg); border-color: var(--accent); background: rgba(255, 107, 53, 0.08); }
+
+  @media (max-width: 640px) {
+    .brand, .stage, .footer-info { padding-left: 20px; padding-right: 20px; }
+    .brand { flex-wrap: wrap; gap: 12px; }
+    .top-actions { order: 3; width: 100%; }
+    .new-track, .back-btn { flex: 1; justify-content: center; padding: 9px 12px; }
+    .resume-bar { flex-wrap: wrap; }
+    .vinyl-stage { max-width: 300px; }
+    .controls { gap: 10px; }
+    .volume-section { margin-left: 0; width: 100%; min-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="atmosphere">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+</div>
+<div class="grain"></div>
+
+<main>
+  <header class="brand">
+    <div class="brand-mark">
+      <div class="brand-icon" aria-hidden="true"></div>
+      <div>
+        <div class="font-serif" style="font-size: 22px; line-height: 1;">Vinyl</div>
+        <div class="brand-meta" style="margin-top: 2px;">YouTube Audio Player</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="back-btn" id="backBtn" title="Back to home — keeps playing" aria-label="Back to home">
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Home</span>
+      </button>
+
+      <button class="new-track" id="newTrackBtn">
+        <i class="fa-solid fa-plus"></i>
+        <span>New Track</span>
+      </button>
+    </div>
+
+    <div class="badge">
+      <span class="badge-dot"></span>
+      <span>Embed Hidden · Audio Only</span>
+    </div>
+  </header>
+
+  <section class="stage">
+    <!-- Input View -->
+    <div class="input-view" id="inputView">
+      <div class="resume-bar" id="resumeBar">
+        <span class="resume-dot" id="resumeDot"></span>
+        <div class="resume-text">
+          <span class="resume-label" id="resumeLabel">Still Playing</span>
+          <span class="resume-title" id="resumeTitle">—</span>
+        </div>
+        <button class="resume-back" id="resumeBackBtn" title="Return to the player">
+          <span>Player</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <div class="eyebrow">
+        <span class="eyebrow-dot"></span>
+        <span>Audio-Only Mode</span>
+      </div>
+
+      <h1 class="hero">
+        Hear YouTube,<br>
+        <em>beautifully.</em>
+      </h1>
+
+      <p class="hero-sub">
+        Drop any YouTube link and we'll pull the highest-quality thumbnail, fetch the track title, and spin the audio in the background — no embed visible, no clutter.
+      </p>
+
+      <div class="input-row">
+        <input type="text" class="url-input" id="urlInput" placeholder="Paste a YouTube URL…" autocomplete="off" spellcheck="false" />
+        <button class="paste-btn" id="pasteBtn" title="Paste from clipboard">
+          <i class="fa-regular fa-clipboard"></i>
+          <span>Paste</span>
+        </button>
+        <button class="load-btn" id="loadBtn">
+          <span>Load</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <div class="hint">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>Supports youtube.com/watch?v=, youtu.be/, shorts/ and embed URLs.</span>
+      </div>
+
+      <div class="examples" id="examplesRow">
+        <span class="examples-label">Try</span>
+        <button class="example-chip" data-url="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Rick Astley</button>
+        <button class="example-chip" data-url="https://youtu.be/iicfmXFALM8?si=ZsmP-Oxf8t8RuTCc">Lo-Fi Radio</button>
+        <button class="example-chip" data-url="https://youtu.be/rYXVAAL_1ss?si=NFBawu3ihaNQCcJM">Chillhop</button>
+      </div>
+
+      <!-- Shown instead of the examples once the user has played something. -->
+      <div class="recent" id="recentSection">
+        <div class="recent-head">
+          <span class="recent-label">Recently played</span>
+          <button class="recent-clear" id="recentClearBtn" title="Forget all history">Clear</button>
+        </div>
+        <div class="recent-list" id="recentList"></div>
+      </div>
+    </div>
+
+    <!-- Player View -->
+    <div class="player-view" id="playerView" style="display: none;">
+      <div class="vinyl-stage">
+        <div class="vinyl-glow" id="vinylGlow"></div>
+        <div class="vinyl-shadow"></div>
+        <div class="vinyl" id="vinyl" role="button" tabindex="0" aria-label="Play or pause">
+          <div class="vinyl-label" id="vinylLabel"></div>
+          <div class="vinyl-highlight"></div>
+        </div>
+        <svg class="tonearm" id="tonearm" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="armGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#5a3428"/>
+              <stop offset="50%" stop-color="#3a2418"/>
+              <stop offset="100%" stop-color="#2a1a14"/>
+            </linearGradient>
+          </defs>
+          <circle cx="176" cy="24" r="16" fill="#2a1a14" stroke="#3a2418" stroke-width="1"/>
+          <circle cx="176" cy="24" r="7" fill="#1a0e08"/>
+          <circle cx="176" cy="24" r="2.5" fill="#ffb627"/>
+          <line x1="176" y1="24" x2="84" y2="118" stroke="url(#armGrad)" stroke-width="7" stroke-linecap="round"/>
+          <line x1="176" y1="24" x2="84" y2="118" stroke="#6a3e30" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+          <g transform="rotate(45 84 118)">
+            <rect x="74" y="110" width="22" height="18" rx="2" fill="#1a0e08" stroke="#3a2418" stroke-width="1"/>
+            <circle cx="85" cy="119" r="3" fill="#ff6b35"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="player-info">
+        <div class="now-playing" id="nowPlayingIndicator">
+          <span id="nowPlayingText">Cued Up</span>
+          <div class="now-playing-bars">
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <h2 class="track-title" id="trackTitle">Loading…</h2>
+        <p class="track-author">
+          <i class="fa-solid fa-microphone-lines"></i>
+          <span id="trackAuthor">—</span>
+        </p>
+
+        <div class="seek-section">
+          <div class="seek-bar" id="seekBar">
+            <div class="seek-bar-fill" id="seekFill"></div>
+            <input type="range" class="seek-bar-input" id="seekInput" min="0" max="100" value="0" step="0.1" aria-label="Seek through track">
+          </div>
+          <div class="times">
+            <span id="currentTime">0:00</span>
+            <a class="track-link" id="trackLink" href="#" target="_blank" rel="noopener">Open on YouTube ↗</a>
+            <span id="duration">0:00</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="ctrl-btn" id="restartBtn" title="Restart" aria-label="Restart track">
+            <i class="fa-solid fa-backward-step"></i>
+          </button>
+          <button class="ctrl-btn primary" id="playBtn" title="Play / Pause" aria-label="Play or pause">
+            <i class="fa-solid fa-play" id="playIcon"></i>
+          </button>
+          <button class="ctrl-btn" id="muteBtn" title="Mute" aria-label="Mute">
+            <i class="fa-solid fa-volume-high" id="muteIcon"></i>
+          </button>
+          <div class="volume-section">
+            <i class="fa-solid fa-volume-low" style="font-size: 11px;"></i>
+            <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80" aria-label="Volume">
+          </div>
+        </div>
+
+        <div class="visualizer" id="visualizer">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer-info">
+    Audio streams directly from YouTube · Press <kbd>Space</kbd> to play/pause · <kbd>←</kbd> <kbd>→</kbd> to seek · For personal listening only
+  </footer>
+</main>
+
+<div class="toast" id="toast"><i class="fa-solid fa-circle-info"></i><span id="toastText"></span></div>
+
+<!-- Shown only when the page is opened over file:// (YouTube IFrame API rejects it) -->
+<div class="protocol-banner" id="protocolBanner" role="alert">
+  <i class="fa-solid fa-triangle-exclamation"></i>
+  <div>
+    <strong>Playback is disabled.</strong> YouTube's player refuses to run over <code>file://</code> (Error&nbsp;153 — no HTTP referer).
+    Serve this folder instead: <code>python3 -m http.server 8000</code> then open
+    <a href="http://localhost:8000/index.html">http://localhost:8000/index.html</a>
+  </div>
+</div>
+
+<!-- Hidden YouTube IFrame container -->
+<div id="yt-hidden" aria-hidden="true"></div>
+
+<!-- Firebase (analytics only — the app itself needs no Firebase services).
+     Module scripts are deferred, so this runs after the DOM below is parsed. -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyABilyAUHLescAh3KGALbM901CpAEoy6wA",
+    authDomain: "vinyl-337a0.firebaseapp.com",
+    projectId: "vinyl-337a0",
+    storageBucket: "vinyl-337a0.firebasestorage.app",
+    messagingSenderId: "152214855299",
+    appId: "1:152214855299:web:5bdd78de0c51b69a1ac5b6",
+    measurementId: "G-QDGG20WME9"
+  };
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    // Analytics is unavailable in some contexts (ad blockers, file://, no
+    // cookies) and throws on init — never let that break playback.
+    window.vinylAnalytics = getAnalytics(app);
+    window.vinylFirebaseApp = app;
+  } catch (err) {
+    console.warn('Firebase init failed:', err);
+  }
+</script>
+
+<script>
+  // ============================================
+  // State
+  // ============================================
+  let player = null;
+  let playerReady = false;
+  let isPlaying = false;
+  let isMuted = false;
+  let lastVolume = 80;
+  let seekInterval = null;
+  let pendingVideoId = null;
+  let currentVideoId = null;
+  let currentTitle = '';
+
+  // ============================================
+  // History (localStorage)
+  // ============================================
+  // A playlist of what this browser has played before, newest first. Stored as
+  // [{ id, title, author, thumb, at }]. Absent/empty -> the "Try" examples show.
+  const HISTORY_KEY = 'vinyl.history.v1';
+  const HISTORY_MAX = 20;
+  let history = loadHistory();
+
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      // Drop anything malformed rather than letting it break rendering
+      return parsed
+        .filter(e => e && typeof e.id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(e.id))
+        .slice(0, HISTORY_MAX);
+    } catch (e) {
+      console.warn('Could not read history:', e);
+      return [];
+    }
+  }
+
+  function saveHistory() {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (e) {
+      // Private mode / quota exceeded — history is a nicety, never fatal
+      console.warn('Could not save history:', e);
+    }
+  }
+
+  function pushHistory(entry) {
+    // Newest first, de-duplicated by video id
+    history = [entry, ...history.filter(e => e.id !== entry.id)].slice(0, HISTORY_MAX);
+    saveHistory();
+    renderHistory();
+  }
+
+  function clearHistory() {
+    history = [];
+    try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const section = document.getElementById('recentSection');
+    const examples = document.getElementById('examplesRow');
+    const list = document.getElementById('recentList');
+    if (!section || !examples || !list) return;
+
+    // New user (or after clearing): fall back to the example chips
+    if (history.length === 0) {
+      section.classList.remove('visible');
+      examples.style.display = 'flex';
+      return;
+    }
+
+    examples.style.display = 'none';
+    section.classList.add('visible');
+    list.innerHTML = '';
+
+    history.forEach(entry => {
+      const item = document.createElement('button');
+      item.className = 'recent-item' + (entry.id === currentVideoId ? ' playing' : '');
+      item.type = 'button';
+      item.title = entry.title || entry.id;
+
+      const thumb = document.createElement('div');
+      thumb.className = 'recent-thumb';
+      if (entry.thumb) thumb.style.backgroundImage = `url("${entry.thumb}")`;
+
+      const meta = document.createElement('div');
+      meta.className = 'recent-meta';
+      const title = document.createElement('span');
+      title.className = 'recent-title';
+      title.textContent = entry.title || 'Unknown Track';
+      const author = document.createElement('span');
+      author.className = 'recent-author';
+      author.textContent = entry.author || entry.id;
+      meta.append(title, author);
+
+      const icon = document.createElement('i');
+      icon.className = entry.id === currentVideoId
+        ? 'fa-solid fa-circle-play'
+        : 'fa-solid fa-play';
+
+      item.append(thumb, meta, icon);
+      item.addEventListener('click', () => {
+        document.getElementById('urlInput').value = `https://www.youtube.com/watch?v=${entry.id}`;
+        loadVideo(`https://www.youtube.com/watch?v=${entry.id}`);
+      });
+      list.appendChild(item);
+    });
+  }
+
+  // ============================================
+  // Protocol guard
+  // ============================================
+  // The YouTube IFrame API refuses to play over file:// (error 153 — it needs an
+  // HTTP referer), so don't even boot the player there. Show guidance instead.
+  const IS_FILE_PROTOCOL = window.location.protocol === 'file:';
+  if (IS_FILE_PROTOCOL) {
+    document.getElementById('protocolBanner').classList.add('show');
+    document.body.classList.add('protocol-blocked');
+    showToast('Opened over file:// — YouTube playback is disabled.', 'error');
+  }
+
+  // ============================================
+  // YouTube IFrame API
+  // ============================================
+  if (!IS_FILE_PROTOCOL) {
+    const tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  }
+
+  window.onYouTubeIframeAPIReady = function() {
+    player = new YT.Player('yt-hidden', {
+      height: '2',
+      width: '2',
+      videoId: '',
+      playerVars: {
+        'autoplay': 0,
+        'controls': 0,
+        'disablekb': 1,
+        'fs': 0,
+        'modestbranding': 1,
+        'playsinline': 1,
+        'rel': 0,
+        'iv_load_policy': 3
+      },
+      events: {
+        'onReady': onPlayerReady,
+        'onStateChange': onPlayerStateChange,
+        'onError': onPlayerError
+      }
+    });
+  };
+
+  function onPlayerReady() {
+    playerReady = true;
+    player.setVolume(lastVolume);
+    if (pendingVideoId) {
+      const id = pendingVideoId;
+      pendingVideoId = null;
+      player.loadVideoById(id);
+    }
+  }
+
+  // ============================================
+  // View switching
+  // ============================================
+  // Both views share the same player instance, so audio keeps running while the
+  // hero screen is shown — switching views only toggles visibility.
+
+  function showHero() {
+    document.getElementById('playerView').style.display = 'none';
+    document.getElementById('inputView').style.display = 'block';
+    document.getElementById('backBtn').classList.remove('visible');
+    document.getElementById('newTrackBtn').classList.remove('visible');
+    // Pre-fill so "Load" re-opens the current track without re-pasting
+    if (currentVideoId) {
+      document.getElementById('urlInput').value = `https://www.youtube.com/watch?v=${currentVideoId}`;
+    }
+    document.getElementById('urlInput').focus();
+    syncResumeBar();
+    renderHistory();
+  }
+
+  function showPlayer() {
+    document.getElementById('inputView').style.display = 'none';
+    document.getElementById('playerView').style.display = 'grid';
+    document.getElementById('backBtn').classList.add('visible');
+    document.getElementById('newTrackBtn').classList.add('visible');
+  }
+
+  function syncResumeBar() {
+    const bar = document.getElementById('resumeBar');
+    const active = !!currentVideoId && !IS_FILE_PROTOCOL;
+    bar.classList.toggle('visible', active);
+    if (!active) return;
+    document.getElementById('resumeTitle').textContent = currentTitle || 'Current track';
+    document.getElementById('resumeLabel').textContent = isPlaying ? 'Still Playing' : 'Paused';
+    const dot = document.getElementById('resumeDot');
+    dot.style.background = isPlaying ? '#4ade80' : 'var(--muted-2)';
+    dot.style.boxShadow = isPlaying ? '0 0 8px #4ade80' : 'none';
+  }
+
+  function onPlayerStateChange(event) {
+    const state = event.data;
+    const vinyl = document.getElementById('vinyl');
+    const tonearm = document.getElementById('tonearm');
+    const glow = document.getElementById('vinylGlow');
+    const np = document.getElementById('nowPlayingIndicator');
+    const npText = document.getElementById('nowPlayingText');
+    const vis = document.getElementById('visualizer');
+
+    if (state === YT.PlayerState.PLAYING) {
+      isPlaying = true;
+      updatePlayButton();
+      startSeekUpdates();
+      vinyl.classList.add('playing');
+      tonearm.classList.add('active');
+      glow.classList.add('active');
+      np.classList.add('active');
+      npText.textContent = 'Now Playing';
+      vis.classList.add('active');
+      syncResumeBar();
+    } else if (state === YT.PlayerState.PAUSED) {
+      isPlaying = false;
+      updatePlayButton();
+      stopSeekUpdates();
+      vinyl.classList.remove('playing');
+      tonearm.classList.remove('active');
+      glow.classList.remove('active');
+      np.classList.remove('active');
+      npText.textContent = 'Paused';
+      vis.classList.remove('active');
+      syncResumeBar();
+    } else if (state === YT.PlayerState.ENDED) {
+      isPlaying = false;
+      updatePlayButton();
+      stopSeekUpdates();
+      vinyl.classList.remove('playing');
+      tonearm.classList.remove('active');
+      glow.classList.remove('active');
+      np.classList.remove('active');
+      npText.textContent = 'Finished';
+      vis.classList.remove('active');
+      syncResumeBar();
+    } else if (state === YT.PlayerState.BUFFERING) {
+      npText.textContent = 'Buffering';
+    } else if (state === YT.PlayerState.CUED) {
+      npText.textContent = 'Cued Up';
+    }
+  }
+
+  function onPlayerError(event) {
+    const messages = {
+      2: 'Invalid video parameter.',
+      5: 'HTML5 player error.',
+      100: 'Video not found, private, or removed.',
+      101: 'Video owner does not allow embedded playback.',
+      150: 'Video owner does not allow embedded playback.',
+      153: 'Missing HTTP referer — YouTube only plays this over http://localhost, not file://.'
+    };
+    showToast(messages[event.data] || 'Playback error.', 'error');
+    document.getElementById('nowPlayingText').textContent = 'Playback Error';
+  }
+
+  // ============================================
+  // URL Parsing
+  // ============================================
+  function extractVideoId(url) {
+    if (!url) return null;
+    url = url.trim();
+    const patterns = [
+      /(?:youtube\.com\/watch\?(?:.*&)?v=)([a-zA-Z0-9_-]{11})/,
+      /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+      /youtube-nocookie\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+      /^[a-zA-Z0-9_-]{11}$/
+    ];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  // ============================================
+  // Thumbnail (highest quality, with fallback chain)
+  // ============================================
+  function loadThumbnail(videoId) {
+    return new Promise((resolve) => {
+      const candidates = [
+        `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+        `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
+        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+      ];
+      let idx = 0;
+      const tryNext = () => {
+        if (idx >= candidates.length) {
+          resolve(candidates[candidates.length - 1]);
+          return;
+        }
+        const url = candidates[idx];
+        const img = new Image();
+        img.onload = () => {
+          // maxresdefault returns a 120x90 placeholder if unavailable
+          if (idx === 0 && img.naturalWidth < 640) {
+            idx++;
+            tryNext();
+          } else {
+            resolve(url);
+          }
+        };
+        img.onerror = () => { idx++; tryNext(); };
+        img.src = url;
+      };
+      tryNext();
+    });
+  }
+
+  // ============================================
+  // Metadata (via noembed.com — CORS-friendly oEmbed proxy)
+  // ============================================
+  async function fetchVideoMeta(videoId) {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    try {
+      const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(watchUrl)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && !data.error) {
+          return {
+            title: data.title || 'Unknown Track',
+            author: data.author_name || 'Unknown Artist'
+          };
+        }
+      }
+    } catch (e) {}
+    return { title: 'YouTube Audio', author: videoId };
+  }
+
+  // ============================================
+  // Toast
+  // ============================================
+  function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    const text = document.getElementById('toastText');
+    const icon = toast.querySelector('i');
+    text.textContent = message;
+    icon.className = type === 'error' ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-circle-check';
+    toast.className = 'toast show' + (type === 'error' ? ' error' : '');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => {
+      toast.className = 'toast' + (type === 'error' ? ' error' : '');
+    }, 3500);
+  }
+
+  // ============================================
+  // Time format
+  // ============================================
+  function formatTime(seconds) {
+    if (!isFinite(seconds) || seconds < 0) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // ============================================
+  // Main Load
+  // ============================================
+  async function loadVideo(url) {
+    if (IS_FILE_PROTOCOL) {
+      showToast('Serve this folder over http://localhost before playing.', 'error');
+      return;
+    }
+    const videoId = extractVideoId(url);
+    if (!videoId) {
+      showToast('That doesn\'t look like a valid YouTube URL.', 'error');
+      return;
+    }
+
+    const loadBtn = document.getElementById('loadBtn');
+    const originalContent = loadBtn.innerHTML;
+    loadBtn.disabled = true;
+    loadBtn.innerHTML = '<span class="spinner"></span><span>Loading</span>';
+
+    // Switch view
+    currentVideoId = videoId;
+    showPlayer();
+
+    // Reset UI
+    document.getElementById('vinyl').classList.remove('playing');
+    document.getElementById('tonearm').classList.remove('active');
+    document.getElementById('vinylGlow').classList.remove('active');
+    document.getElementById('trackTitle').textContent = 'Loading…';
+    document.getElementById('trackAuthor').textContent = videoId;
+    document.getElementById('vinylLabel').style.backgroundImage = '';
+    document.getElementById('nowPlayingText').textContent = 'Loading';
+    document.getElementById('duration').textContent = '0:00';
+    document.getElementById('currentTime').textContent = '0:00';
+    document.getElementById('seekFill').style.width = '0%';
+    document.getElementById('seekInput').value = 0;
+    document.getElementById('trackLink').href = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Load video into hidden player (within user gesture for autoplay)
+    if (playerReady && player) {
+      player.loadVideoById(videoId);
+      player.setVolume(lastVolume);
+    } else {
+      pendingVideoId = videoId;
+    }
+
+    // Fetch thumbnail + metadata in parallel
+    try {
+      const [thumbUrl, meta] = await Promise.all([
+        loadThumbnail(videoId),
+        fetchVideoMeta(videoId)
+      ]);
+      document.getElementById('vinylLabel').style.backgroundImage = `url("${thumbUrl}")`;
+      document.getElementById('trackTitle').textContent = meta.title;
+      document.getElementById('trackAuthor').textContent = meta.author;
+      currentTitle = meta.title;
+      // Remember it for next time (after metadata resolves, so the entry is useful)
+      pushHistory({ id: videoId, title: meta.title, author: meta.author, thumb: thumbUrl, at: Date.now() });
+      syncResumeBar();
+    } catch (e) {
+      console.error(e);
+      document.getElementById('trackTitle').textContent = 'YouTube Audio';
+      document.getElementById('trackAuthor').textContent = videoId;
+    }
+
+    loadBtn.disabled = false;
+    loadBtn.innerHTML = originalContent;
+  }
+
+  // ============================================
+  // Controls
+  // ============================================
+  function togglePlay() {
+    if (!player || !playerReady) return;
+    if (isPlaying) player.pauseVideo();
+    else player.playVideo();
+  }
+
+  function updatePlayButton() {
+    const icon = document.getElementById('playIcon');
+    icon.className = isPlaying ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+  }
+
+  function startSeekUpdates() {
+    stopSeekUpdates();
+    seekInterval = setInterval(updateSeek, 250);
+    updateSeek();
+  }
+  function stopSeekUpdates() {
+    if (seekInterval) { clearInterval(seekInterval); seekInterval = null; }
+  }
+  function updateSeek() {
+    if (!player || !playerReady) return;
+    const current = player.getCurrentTime() || 0;
+    const duration = player.getDuration() || 0;
+    if (duration > 0) {
+      const pct = (current / duration) * 100;
+      document.getElementById('seekFill').style.width = pct + '%';
+      document.getElementById('seekInput').value = pct;
+    }
+    document.getElementById('currentTime').textContent = formatTime(current);
+    document.getElementById('duration').textContent = formatTime(duration);
+  }
+
+  // ============================================
+  // Event Listeners
+  // ============================================
+  document.getElementById('loadBtn').addEventListener('click', () => {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) { showToast('Please paste a YouTube URL first.'); return; }
+    loadVideo(url);
+  });
+
+  document.getElementById('urlInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('loadBtn').click();
+  });
+
+  document.getElementById('pasteBtn').addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        document.getElementById('urlInput').value = text;
+        document.getElementById('urlInput').focus();
+      } else {
+        showToast('Clipboard is empty.');
+      }
+    } catch (e) {
+      showToast('Clipboard access denied. Please paste manually.', 'error');
+    }
+  });
+
+  document.querySelectorAll('.example-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const url = chip.dataset.url;
+      document.getElementById('urlInput').value = url;
+      loadVideo(url);
+    });
+  });
+
+  document.getElementById('recentClearBtn').addEventListener('click', () => {
+    clearHistory();
+    showToast('Recently played cleared.');
+  });
+
+  // Show the playlist (or the examples) on first paint
+  renderHistory();
+
+  document.getElementById('playBtn').addEventListener('click', togglePlay);
+
+  document.getElementById('vinyl').addEventListener('click', togglePlay);
+  document.getElementById('vinyl').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePlay(); }
+  });
+
+  document.getElementById('restartBtn').addEventListener('click', () => {
+    if (player && playerReady) {
+      player.seekTo(0, true);
+      if (!isPlaying) player.playVideo();
+    }
+  });
+
+  document.getElementById('muteBtn').addEventListener('click', () => {
+    if (!player || !playerReady) return;
+    if (isMuted) {
+      player.unMute();
+      player.setVolume(lastVolume);
+      isMuted = false;
+      document.getElementById('muteIcon').className = lastVolume === 0 ? 'fa-solid fa-volume-xmark' : (lastVolume < 50 ? 'fa-solid fa-volume-low' : 'fa-solid fa-volume-high');
+      document.getElementById('volumeSlider').value = lastVolume;
+    } else {
+      lastVolume = player.getVolume() || lastVolume;
+      player.mute();
+      isMuted = true;
+      document.getElementById('muteIcon').className = 'fa-solid fa-volume-xmark';
+      document.getElementById('volumeSlider').value = 0;
+    }
+  });
+
+  document.getElementById('volumeSlider').addEventListener('input', (e) => {
+    const vol = parseInt(e.target.value);
+    if (player && playerReady) {
+      if (vol === 0) {
+        player.mute();
+        isMuted = true;
+        document.getElementById('muteIcon').className = 'fa-solid fa-volume-xmark';
+      } else {
+        player.unMute();
+        player.setVolume(vol);
+        isMuted = false;
+        lastVolume = vol;
+        document.getElementById('muteIcon').className = vol < 50 ? 'fa-solid fa-volume-low' : 'fa-solid fa-volume-high';
+      }
+    }
+  });
+
+  document.getElementById('seekInput').addEventListener('input', (e) => {
+    if (!player || !playerReady) return;
+    const duration = player.getDuration() || 0;
+    if (duration > 0) {
+      const time = (parseFloat(e.target.value) / 100) * duration;
+      player.seekTo(time, true);
+      document.getElementById('seekFill').style.width = e.target.value + '%';
+      document.getElementById('currentTime').textContent = formatTime(time);
+    }
+  });
+
+  // Back to hero: hide the player view but let the audio keep running.
+  document.getElementById('backBtn').addEventListener('click', showHero);
+  document.getElementById('resumeBackBtn').addEventListener('click', showPlayer);
+
+  document.getElementById('newTrackBtn').addEventListener('click', () => {
+    if (player && playerReady) player.pauseVideo();
+    currentVideoId = null;
+    currentTitle = '';
+    showHero();
+    document.getElementById('urlInput').value = '';
+    renderHistory();
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement.tagName === 'INPUT' && document.activeElement.type !== 'range') return;
+    if (document.getElementById('playerView').style.display === 'none') return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      togglePlay();
+    } else if (e.code === 'ArrowLeft') {
+      if (player && playerReady) {
+        const t = player.getCurrentTime();
+        player.seekTo(Math.max(0, t - 5), true);
+      }
+    } else if (e.code === 'ArrowRight') {
+      if (player && playerReady) {
+        const t = player.getCurrentTime();
+        const d = player.getDuration();
+        player.seekTo(Math.min(d, t + 5), true);
+      }
+    } else if (e.code === 'ArrowUp') {
+      e.preventDefault();
+      const slider = document.getElementById('volumeSlider');
+      slider.value = Math.min(100, parseInt(slider.value) + 5);
+      slider.dispatchEvent(new Event('input'));
+    } else if (e.code === 'ArrowDown') {
+      e.preventDefault();
+      const slider = document.getElementById('volumeSlider');
+      slider.value = Math.max(0, parseInt(slider.value) - 5);
+      slider.dispatchEvent(new Event('input'));
+    }
+  });
+
+  // Focus input on load
+  if (!IS_FILE_PROTOCOL) document.getElementById('urlInput').focus();
+</script>
+
+</body>
+</html>
